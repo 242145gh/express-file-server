@@ -91,29 +91,34 @@ app.post('/api/update-metadata', upload.none(), async (req, res) => {
   }
 });
 
-app.post('/api/pull-metadata', async (req,res) =>{
-    try{
+app.post('/api/pull-metadata', upload.none(), async (req, res) => {
+  try {
+      const { public_id } = req.body;
+      console.log("Received Body: " + JSON.stringify(req.body));
+      console.log("Public ID in pull meta:", JSON.stringify(req.body.public_id)); 
 
-      const { public_id} = req.body
-   
+     
+      const pull = await cloudinary.api.resource([public_id], {
+          resource_type: 'image', 
+      });
 
-    console.log("PULLs meta: " + JSON.stringify(req.body)); // Log request body
-      const pull = await cloudinary.api.resource(public_id, {
-        resource_type: 'image',  // Specify if it's an image or other media type
+      const metadata = pull.metadata
+      console.log("Fetched resource:", JSON.stringify(pull));
+
+    
+      res.status(200).json({
+        title: [pull.metadata.title], 
+        description: [pull.metadata.description],
+        secure_url: [pull.secure_url]
       });
   
-   
-    res.status(200).json({
-      title: [pull.metadata.title], 
-      description: [pull.metadata.description]
-    });
-
-
-    } catch (error) {
-      console.error("Error updating metadata:", error);
-      res.status(500).json({ error: 'An error occurred while Pulling the metadata' });
-    }
   
+
+
+  } catch (error) {
+      console.error("Error pulling image:", error);
+      res.status(500).json({ error: 'An error occurred while pulling the image' });
+  }
 });
 
 // Start the server
