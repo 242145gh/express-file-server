@@ -4,6 +4,12 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();  // Load environment variables
 const multer = require('multer'); // Import multer
+const postgres = require('postgres');
+
+// Initialize connection using the connection string from your .env file
+const sql = postgres(process.env.POSTGRES_URL);
+
+
 
 const app = express();
 
@@ -94,32 +100,51 @@ app.post('/api/update-metadata', upload.none(), async (req, res) => {
 app.post('/api/pull-metadata', upload.none(), async (req, res) => {
   try {
       const { public_id } = req.body;
-      console.log("Received Body: " + JSON.stringify(req.body));
-      console.log("Public ID in pull meta:", JSON.stringify(req.body.public_id)); 
+     // console.log("Received Body: " + JSON.stringify(req.body));
+     // console.log("Public ID in pull meta:", JSON.stringify(req.body.public_id)); 
 
      
       const pull = await cloudinary.api.resource([public_id], {
           resource_type: 'image', 
       });
-
-      const metadata = pull.metadata
-      console.log("Fetched resource:", JSON.stringify(pull));
-
-    
+     
+    //  console.log("Fetched resource:", JSON.stringify(pull));
+   
       res.status(200).json({
         title: [pull.metadata.title], 
         description: [pull.metadata.description],
         secure_url: [pull.secure_url]
       });
   
-  
-
-
   } catch (error) {
       console.error("Error pulling image:", error);
       res.status(500).json({ error: 'An error occurred while pulling the image' });
   }
 });
+
+app.get('/test-db', async (req, res) => {
+  try {
+    const result = await sql`SELECT NOW()`;
+    res.status(200).json({ message: 'Connected to the database', time: result });
+  } catch (error) { 
+    console.error('Error connecting to database:', error);
+    res.status(500).json({ error: 'Failed to connect to the database' });
+  }
+});
+
+app.post('/api/chat_history',  async (req, res) => {
+  const { public_id } = req.body;
+  console.log("Public ID in chat history:", JSON.stringify(req.body));
+  try {
+    // Query the database
+     const rows  = await sql`SELECT * FROM chat_history where public_id=${public_id}`;
+     res.status(200).json({ rows });
+  } catch (error) {
+    console.error("Error fetching chat history:", error);
+    res.status(500).json({ error: 'Error fetching chat history' });
+  }
+});
+
 
 // Start the server
 const PORT = process.env.PORT || 3001;
