@@ -138,53 +138,6 @@ app.post('/api/chat_history', async (req, res) => {
   }
 });
 
-// Handle WebSocket connections
-wss.on('connection', (ws) => {
-  console.log('Client connected');
-
-  ws.on('message', async (message) => {
-    try {
-      const audioData = message.toString(); // Convert the message to string if it's a buffer
-      console.log("Audio data received:", audioData.length);
-
-      // Save the audio data to a file
-      const wavFilePath = 'output.wav';
-      saveBase64AsWav(audioData, wavFilePath);
-
-      // Dynamically import the Gradio client
-      const { Client } = await import("@gradio/client");
-      const client = await Client.connect("KingNish/Realtime-whisper-large-v3-turbo");
-
-      // Read the saved WAV file to send it
-      const audioBlob = fs.readFileSync(wavFilePath);
-
-      // Call the prediction function with the audio Blob
-      const result = await client.predict("/transcribe", {
-        inputs: audioBlob,
-      });
-
-      // Send transcription result back to the client
-      ws.send(JSON.stringify(result));
-    } catch (error) {
-      console.error("Transcription error:", error);
-      ws.send(JSON.stringify({ error: "Transcription failed", details: error.message }));
-    }
-  });
-
-  ws.on('close', () => {
-    console.log('Client disconnected');
-  });
-});
-
-// Upgrade HTTP server to support WebSocket
-app.server = app.listen(process.env.PORT || 3001, () => {
-  console.log(`Server is running on port ${process.env.PORT || 3001}`);
-});
-app.server.on('upgrade', (request, socket, head) => {
-  wss.handleUpgrade(request, socket, head, (ws) => {
-    wss.emit('connection', ws, request);
-  });
-});
 
 // Utility function to convert base64 to a Blob
 function base64ToBlob(base64, mimeType = 'audio/wav') {
@@ -203,70 +156,46 @@ function saveBase64AsWav(base64Data, filePath) {
   // Write the buffer to a file
   fs.writeFileSync(filePath, buffer);
 }
-
-// Route for transcription via POST request
 app.post('/api/transcribe', async (req, res) => {
   try {
-    const { audioData } = req.body; // Expecting base64 audio data
-
-    // Dynamically import the Gradio client
-    const { Client } = await import("@gradio/client");
-    
-    // Connect to the Gradio app
-    const client = await Client.connect("KingNish/Realtime-whisper-large-v3-turbo");
-
-    // Save the audio data to a file
-    const wavFilePath = 'output.wav'; // or a path you prefer
-    saveBase64AsWav(audioData, wavFilePath);
-
-    // Read the saved WAV file to send it
-    const audioBlob = fs.readFileSync(wavFilePath);
-
-    // Call the prediction function with the audio Blob
-    const result = await client.predict("/transcribe", {
-      inputs: audioBlob, // Use the Blob
-    });
-
-    // Send the transcription result back to the client
-    res.status(200).json({ transcription: result.data });
-  } catch (error) {
-    console.error("Transcription error:", error);
-    res.status(500).json({ error: "Transcription failed" });
-  }
-});
-
-// Route for transcription stream via POST request
-app.post('/api/transcribe-stream', (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-
-  const { audioData } = req.body; // Get audio data from the request body
-
-  (async () => {
-    try {
-      console.log("Audio data length:", audioData.length);
+      const { audioData } = req.body; // Expecting base64 audio data
+      console.log("Audio data length:", audioData.length);  
       console.log("First 100 characters of audioData:", audioData.slice(0, 100));
+      
+      const wavFilePath = 'output.wav'; // or a path you prefer
+      saveBase64AsWav(audioData, wavFilePath);
 
       // Convert base64 audio data to a Blob
-      const wavFileBlob = base64ToBlob(audioData); // Convert to Blob
+      const wavfile = base64ToBlob(audioData); // Convert to Blob
+
+      // Dynamically import the Gradio client
       const { Client } = await import("@gradio/client");
+
+      // Connect to the Gradio app
       const client = await Client.connect("KingNish/Realtime-whisper-large-v3-turbo");
 
+      // Read the saved WAV file to send it
+      const audioBlob = fs.readFileSync(wavFilePath);
+        
+
       // Call the prediction function with the audio Blob
-      const result = await client.predict("/transcribe", { inputs: wavFileBlob });
+      const result = await client.predict("/transcribe", {
+          inputs: audioBlob, // Use the Blob
+      });
 
-      // Send each piece of data as it comes
-      for (const item of result.data) {
-        res.write(`data: ${JSON.stringify(item)}\n\n`);
-      }
+      console.log(result)
 
-      res.end(); // End the connection when done
-    } catch (error) {
+      // Send the transcription result back to the client
+      res.status(200).json({ transcription: result.data });
+  } catch (error) {
       console.error("Transcription error:", error);
-      res.write(`data: {"error": "Transcription failed"}\n\n`);
-      res.end();
-    }
-  })();
+      res.status(500).json({ error: "Transcription failed" });
+  }
+  
 });
 
+
+// Start the server
+app.listen(process.env.PORT || 3001, () => {
+  console.log(`Server is running on port ${process.env.PORT || 3001}`);
+});
